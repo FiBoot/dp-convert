@@ -3,6 +3,7 @@ import math
 import numpy
 from PIL import Image, ImageDraw
 
+AUTO_SAMPLING_SCALING = 3
 DEFAULT_RENDER_PIXEL_SIZE = 8
 DEFAULT_GAP = 1
 DEFAULT_COLOR_COUNT = 54
@@ -38,13 +39,16 @@ class Main():
   def get_params(self, image):
     width, height = image.size
     min_size = width if width < height else height
-    auto_sampling = round(math.sqrt(min_size) / 3)
+    # auto sampling
+    auto_sampling = round(math.sqrt(min_size) / AUTO_SAMPLING_SCALING)
     print(f'Echantillonnage de l\'image: (defaut: {auto_sampling})')
     self.sampling_size = int(input() or auto_sampling)
     # def board size
     self.board_size = image.size[0] // self.sampling_size, image.size[1] // self.sampling_size
-    print(f'Taille du pixel de rendu: (defaut: {DEFAULT_RENDER_PIXEL_SIZE})')
-    self.render_pixel_size = int(input() or DEFAULT_RENDER_PIXEL_SIZE)
+    # propose new pixel size
+    proposed_pixel_size = self.sampling_size if self.sampling_size < DEFAULT_RENDER_PIXEL_SIZE else DEFAULT_RENDER_PIXEL_SIZE
+    print(f'Taille du pixel de rendu: (defaut: {proposed_pixel_size})')
+    self.render_pixel_size = int(input() or proposed_pixel_size)
     print(f'Nombre limite de couleurs: (defaut: {DEFAULT_COLOR_COUNT})')
     self.color_count = int(input() or DEFAULT_COLOR_COUNT)
   
