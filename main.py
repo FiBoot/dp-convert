@@ -4,38 +4,37 @@ import numpy
 from PIL import Image, ImageDraw, ImagePalette
 from dmc_colors import DMC_RGB_COLORS
 
-# DMC_RGB_COLORS=[
-#   199,43,59,    #321	Red
-#   90,143,184,   #322	Baby Blue Dark
-#   179,59,75,    #326	Rose Very Dark
-#   99,54,102,    #327	Violet Dark
-# ]
-
-DEFAULT_SAMPLING_SCALE = 4
+DEFAULT_SAMPLING_SCALE = 8
 DEFAULT_RENDER_PIXEL_SIZE = 8
 DEFAULT_GAP = 1
-DEFAULT_GAP_COLOR = (66,66,66)  #3799	Pewter Gray Very Dark
+DEFAULT_GAP_COLOR = (0,0,0) 
 DEFAULT_COLOR_COUNT = 256
 
+def fixed(number, decimal = 2):
+  decimal = 10 ** decimal
+  return round(number * decimal) / decimal
+  
 class Main():
   def __init__(self):
     if (len(sys.argv) < 2):
       return print('Error [init]: need an image file in argument')
     # get params
     base_image = self.get_params(sys.argv[1])
+    if (not base_image):
+      return print('err')
     # gap & board size
     self.gap = DEFAULT_GAP if len(sys.argv) < 3 else int(sys.argv[2])
     self.board_size = base_image.size[0] // self.sampling_size, base_image.size[1] // self.sampling_size
     # process image
-    print(f'[1/5] creating colors palette..')
+    print('[1/5] Création de la palette..')
     palette_image = self.create_color_palette(self.color_count)
-    print(f'[2/5] resize & color reduce image..')
+    print('[2/5] Correspondance de couleurs..')
     image = self.reduce_colors(base_image, palette_image)
-    print('[3/5] generating pixels..')
-    pixels = self.process_pixels(image)
-    print('[4/5] creating image..')
+    print('[3/5] Lecture des données pixels..')
+    pixels = self.get_pixels(image)
+    print('[4/5] Création de l\'image..')
     new_image = self.draw_image(pixels)
-    print('[5/5] rendering..')
+    print('[5/5] Ouverture du fichier..')
     # show image
     new_image.show()
     
@@ -45,15 +44,13 @@ class Main():
     min_size = width if width < height else height
     # auto sampling
     auto_sampling = round(math.sqrt(min_size) / DEFAULT_SAMPLING_SCALE)
-    print(f'Echantillonnage de l\'image: (defaut: {auto_sampling})')
+    print(f'Echantillonnage de l\'image: (défaut: {auto_sampling})')
     self.sampling_size = int(input() or auto_sampling)
     # def board size
     self.board_size = image.size[0] // self.sampling_size, image.size[1] // self.sampling_size
-    # propose new pixel size
-    proposed_pixel_size = self.sampling_size if self.sampling_size < DEFAULT_RENDER_PIXEL_SIZE else DEFAULT_RENDER_PIXEL_SIZE
-    print(f'Taille du pixel de rendu: (defaut: {proposed_pixel_size})')
-    self.render_pixel_size = int(input() or proposed_pixel_size)
-    print(f'Nombre limite de couleurs: (defaut: {DEFAULT_COLOR_COUNT})')
+    print(f'Taille du pixel de rendu: (défaut: {DEFAULT_RENDER_PIXEL_SIZE})')
+    self.render_pixel_size = int(input() or DEFAULT_RENDER_PIXEL_SIZE)
+    print(f'Nombre limite de couleurs: (défaut: {DEFAULT_COLOR_COUNT})')
     self.color_count = int(input() or DEFAULT_COLOR_COUNT)
     return image
 
@@ -63,29 +60,56 @@ class Main():
     max_rgb_color_count = rgb_color_count if rgb_color_count < len(DMC_RGB_COLORS) else len(DMC_RGB_COLORS)
     rgb_colors = DMC_RGB_COLORS[:max_rgb_color_count]
     self.color_count = len(rgb_colors) // 3
-    print(f'\t↪ color count: {self.color_count}')
+    print(f'\t↪ nombre de couleurs: {self.color_count}')
     palette_image.putpalette(rgb_colors)
     return palette_image
   
+  def get_DMC_color(self, index):
+    return (DMC_RGB_COLORS[index], DMC_RGB_COLORS[index + 1], DMC_RGB_COLORS[index + 2])
+  
+  def process_pixel(self, pixel):
+    closest_differ = 255 * 3
+    closest_index = -1
+    for index in range(self.color_count):
+      i = index * 3
+      r = abs(DMC_RGB_COLORS[i] - pixel[0])
+      g = abs(DMC_RGB_COLORS[i + 1] -pixel[1])
+      b = abs(DMC_RGB_COLORS[i + 2] - pixel[2])
+      current_differ = r + g + b
+      if current_differ < closest_differ:
+        closest_index = i
+        closest_differ = current_differ
+        if current_differ == 0:
+          self.bingo_count += 1
+          break
+    self.differs.append(closest_differ)
+    return self.get_DMC_color(closest_index)
+  
   def reduce_colors(self, image, palette_image):
-    processed_image = image.resize(self.board_size)
-    px = processed_image.load()
-    for x in range(processed_image.width):
-      for y in range(processed_image.height):
-        pixel = processed_image.getpixel((x, y))
-        print(pixel)
-    #.convert("RGB").quantize(palette=palette_image)
-    # resize_image = image.resize(self.board_size).convert("RGB")
-    # processed_image = resize_image.quantize(palette=palette_image, dither=Image.Dither.NONE)
-    return processed_image.convert("RGB")
-    
-  def process_pixels(self, image):
+    resize_image = image.resize(self.board_size).convert("RGB")
+    self.differs = []
+    self.bingo_count = 0
+    for x in range(resize_image.width):
+      for y in range(resize_image.height):
+        pixel = resize_image.getpixel((x, y))
+        color = self.process_pixel(pixel)
+        resize_image.putpixel((x,y), color)
+    average_differ = fixed(sum(self.differs) / len(self.differs))
+    differ_percentage = fixed(average_differ / 255 * 100)
+    print(f'\t↪ Moyenne de difference: {differ_percentage}% ({average_differ}/{255})')
+    pixel_count = resize_image.width * resize_image.height
+    bingo_percentage = fixed(self.bingo_count / pixel_count * 100)
+    print(f'\t↪ Nombre de parfait: {bingo_percentage}% ({self.bingo_count}/{pixel_count})')
+    return resize_image
+
+
+  def get_pixels(self, image):
     pixels = list(image.getdata())
     colors = set()
     for pixel in pixels:
       colors.add(pixel)
-    print(f'\t↪ {len(pixels)} pixels generated')
-    print(f'\t↪ {len(colors)} different colors')
+    print(f'\t↪ {len(pixels)} pixels générés')
+    print(f'\t↪ {len(colors)} couleurs')
     return pixels
   
   def draw_pixel(self, image, coords, color):
@@ -99,8 +123,8 @@ class Main():
     image_size_x = self.board_size[0] * (self.render_pixel_size + self.gap) + self.gap
     image_size_y = self.board_size[1] * (self.render_pixel_size + self.gap) + self.gap
     image_size = image_size_x, image_size_y
-    print(f'\t↪ image size: {image_size}')
-    print(f'\t↪ board size: {self.board_size}')
+    print(f'\t↪ taille de l\'image: {image_size}')
+    print(f'\t↪ taille en diamands: {self.board_size}')
     image = Image.new("RGB", image_size, DEFAULT_GAP_COLOR)
     for y in range(self.board_size[1]):
       for x in range(self.board_size[0]):
