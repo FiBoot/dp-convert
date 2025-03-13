@@ -1,7 +1,7 @@
 import sys      
 import math
 import numpy
-from PIL import Image, ImageDraw, ImagePalette
+from PIL import Image
 from dmc_colors import DMC_RGB_COLORS
 
 DEFAULT_SAMPLING_SCALE = 8
@@ -64,9 +64,6 @@ class Main():
     palette_image.putpalette(rgb_colors)
     return palette_image
   
-  def get_DMC_color(self, index):
-    return (DMC_RGB_COLORS[index], DMC_RGB_COLORS[index + 1], DMC_RGB_COLORS[index + 2])
-  
   def process_pixel(self, pixel):
     closest_differ = 255 * 3
     closest_index = -1
@@ -83,7 +80,7 @@ class Main():
           self.bingo_count += 1
           break
     self.differs.append(closest_differ)
-    return self.get_DMC_color(closest_index)
+    return (DMC_RGB_COLORS[closest_index], DMC_RGB_COLORS[closest_index + 1], DMC_RGB_COLORS[closest_index + 2])
   
   def reduce_colors(self, image, palette_image):
     resize_image = image.resize(self.board_size).convert("RGB")
@@ -102,7 +99,6 @@ class Main():
     print(f'\t↪ Nombre de parfait: {bingo_percentage}% ({self.bingo_count}/{pixel_count})')
     return resize_image
 
-
   def get_pixels(self, image):
     pixels = list(image.getdata())
     colors = set()
@@ -113,11 +109,11 @@ class Main():
     return pixels
   
   def draw_pixel(self, image, coords, color):
+    pos_x = self.gap * (coords[0] + 1) + coords[0] * self.render_pixel_size
+    pos_y = self.gap * (coords[1] + 1) + coords[1] * self.render_pixel_size
     for y in range(self.render_pixel_size):
       for x in range(self.render_pixel_size):
-        pos_x = self.gap * (coords[0] + 1) + coords[0] * self.render_pixel_size + x
-        pos_y = self.gap * (coords[1] + 1) + coords[1] * self.render_pixel_size + y
-        image.putpixel((pos_x, pos_y), color)
+        image.putpixel((pos_x + x, pos_y + y), color)
  
   def draw_image(self, pixels):
     image_size_x = self.board_size[0] * (self.render_pixel_size + self.gap) + self.gap
