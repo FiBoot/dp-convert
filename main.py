@@ -2,13 +2,13 @@ import sys
 import math
 import numpy
 from PIL import Image
-from dmc_colors import DMC_RGB_COLORS
+from dmc_colors_old import DMC_RGB_COLORS
 
 DEFAULT_SAMPLING_SCALE = 8
 DEFAULT_RENDER_PIXEL_SIZE = 8
+RENDER_PIXEL_SIZES = [1,2,4,8,16]
 DEFAULT_GAP = 1
-DEFAULT_GAP_COLOR = (0,0,0) 
-DEFAULT_COLOR_COUNT = 256
+DEFAULT_GAP_COLOR = (0,0,0)
 
 def fixed(number, decimal = 2):
   decimal = 10 ** decimal
@@ -18,18 +18,15 @@ class Main():
   def __init__(self):
     if (len(sys.argv) < 2):
       return print('Error [init]: need an image file in argument')
+    base_image = self.open_file(sys.argv[1])
     # get params
-    base_image = self.get_params(sys.argv[1])
-    if (not base_image):
-      return print('err')
+    self.get_params(base_image)
     # gap & board size
     self.gap = DEFAULT_GAP if len(sys.argv) < 3 else int(sys.argv[2])
     self.board_size = base_image.size[0] // self.sampling_size, base_image.size[1] // self.sampling_size
     # process image
-    print('[1/5] Création de la palette..')
-    palette_image = self.create_color_palette(self.color_count)
     print('[2/5] Correspondance de couleurs..')
-    image = self.reduce_colors(base_image, palette_image)
+    image = self.reduce_colors(base_image)
     print('[3/5] Lecture des données pixels..')
     pixels = self.get_pixels(image)
     print('[4/5] Création de l\'image..')
@@ -37,6 +34,10 @@ class Main():
     print('[5/5] Ouverture du fichier..')
     # show image
     new_image.show()
+    
+  def open_file(self, path):
+    print('[1/5] Ouverture de l\'image..')
+    return Image.open(path, "r")
     
   def get_params(self, image):
     image = Image.open(sys.argv[1], "r")
@@ -50,8 +51,9 @@ class Main():
     self.board_size = image.size[0] // self.sampling_size, image.size[1] // self.sampling_size
     print(f'Taille du pixel de rendu: (défaut: {DEFAULT_RENDER_PIXEL_SIZE})')
     self.render_pixel_size = int(input() or DEFAULT_RENDER_PIXEL_SIZE)
-    print(f'Nombre limite de couleurs: (défaut: {DEFAULT_COLOR_COUNT})')
-    self.color_count = int(input() or DEFAULT_COLOR_COUNT)
+    default_color_count = len(DMC_RGB_COLORS) // 3
+    print(f'Nombre limite de couleurs: (défaut: {default_color_count})')
+    self.color_count = int(input() or default_color_count)
     return image
 
   def create_color_palette(self, color_count):
@@ -69,9 +71,9 @@ class Main():
     closest_index = -1
     for index in range(self.color_count):
       i = index * 3
-      r = abs(DMC_RGB_COLORS[i] - pixel[0])
-      g = abs(DMC_RGB_COLORS[i + 1] -pixel[1])
-      b = abs(DMC_RGB_COLORS[i + 2] - pixel[2])
+      r = abs(pixel[0] - DMC_RGB_COLORS[i])
+      g = abs(pixel[1] - DMC_RGB_COLORS[i + 1])
+      b = abs(pixel[2] - DMC_RGB_COLORS[i + 2])
       current_differ = r + g + b
       if current_differ < closest_differ:
         closest_index = i
@@ -82,7 +84,7 @@ class Main():
     self.differs.append(closest_differ)
     return (DMC_RGB_COLORS[closest_index], DMC_RGB_COLORS[closest_index + 1], DMC_RGB_COLORS[closest_index + 2])
   
-  def reduce_colors(self, image, palette_image):
+  def reduce_colors(self, image):
     resize_image = image.resize(self.board_size).convert("RGB")
     self.differs = []
     self.bingo_count = 0
